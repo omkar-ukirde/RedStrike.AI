@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RedStrike.AI - Web Pentesting Platform</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen active">
+            <div class="login-container">
+                <div class="login-header">
+                    <h1>🎯 RedStrike.AI</h1>
+                    <p>Enterprise Web Pentesting Platform</p>
+                </div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" placeholder="admin@redstrike.ai" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Login</button>
+                </form>
+                <p id="login-error" class="error-text"></p>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard-screen" class="screen">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>🎯 RedStrike.AI</h2>
+                </div>
+                <nav class="sidebar-nav">
+                    <a href="#" class="nav-item active" data-view="projects">
+                        <span class="icon">📁</span> Projects
+                    </a>
+                    <a href="#" class="nav-item" data-view="site-view">
+                        <span class="icon">🗺️</span> Site View
+                    </a>
+                    <a href="#" class="nav-item" data-view="findings">
+                        <span class="icon">🔍</span> Findings
+                    </a>
+                    <a href="#" class="nav-item" data-view="settings">
+                        <span class="icon">⚙️</span> Settings
+                    </a>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="user-info">
+                        <span id="user-email">admin@redstrike.ai</span>
+                        <button id="logout-btn" class="btn btn-text">Logout</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Projects View -->
+                <div id="projects-view" class="view active">
+                    <div class="view-header">
+                        <h1>Projects</h1>
+                        <button id="new-project-btn" class="btn btn-primary">+ New Project</button>
+                    </div>
+                    <div id="projects-list" class="projects-grid">
+                        <!-- Projects will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Project Detail View -->
+                <div id="project-detail-view" class="view">
+                    <div class="view-header">
+                        <button id="back-to-projects" class="btn btn-text">← Back</button>
+                        <h1 id="project-name">Project Name</h1>
+                        <div class="project-actions">
+                            <button id="start-scan-btn" class="btn btn-primary">▶ Start Scan</button>
+                            <button id="pause-scan-btn" class="btn btn-secondary" style="display:none">⏸ Pause</button>
+                            <button id="export-btn" class="btn btn-secondary">📥 Export CSV</button>
+                        </div>
+                    </div>
+                    <div class="project-status-bar">
+                        <span id="project-status" class="status-badge">Pending</span>
+                        <span id="project-target"></span>
+                    </div>
+                    <div class="project-tabs">
+                        <button class="tab-btn active" data-tab="scan-log">Scan Log</button>
+                        <button class="tab-btn" data-tab="findings-tab">Findings</button>
+                        <button class="tab-btn" data-tab="sitemap-tab">Site Map</button>
+                    </div>
+                    <div class="tab-content">
+                        <div id="scan-log" class="tab-pane active">
+                            <div id="scan-log-content" class="log-viewer">
+                                <p class="log-empty">No scan logs yet. Start a scan to see progress.</p>
+                            </div>
+                        </div>
+                        <div id="findings-tab" class="tab-pane">
+                            <div id="findings-list" class="findings-table">
+                                <!-- Findings will be loaded here -->
+                            </div>
+                        </div>
+                        <div id="sitemap-tab" class="tab-pane">
+                            <div id="sitemap-tree" class="sitemap-viewer">
+                                <!-- Sitemap will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Site View -->
+                <div id="site-view" class="view">
+                    <div class="view-header">
+                        <h1>Site View</h1>
+                        <select id="site-view-project-select" class="select">
+                            <option value="">Select a project...</option>
+                        </select>
+                    </div>
+                    <div class="site-view-container">
+                        <div id="site-tree" class="site-tree">
+                            <!-- Site tree will be loaded here -->
+                        </div>
+                        <div id="endpoint-detail" class="endpoint-detail">
+                            <p class="placeholder-text">Select an endpoint to view details</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Findings View -->
+                <div id="findings-view" class="view">
+                    <div class="view-header">
+                        <h1>All Findings</h1>
+                        <div class="findings-filters">
+                            <select id="severity-filter" class="select">
+                                <option value="">All Severities</option>
+                                <option value="critical">Critical</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                                <option value="info">Info</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="all-findings-list" class="findings-table">
+                        <!-- All findings will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Settings View -->
+                <div id="settings-view" class="view">
+                    <div class="view-header">
+                        <h1>Settings</h1>
+                    </div>
+                    <div class="settings-container">
+                        <div class="setting-group">
+                            <h3>Model Configuration</h3>
+                            <div class="form-group">
+                                <label>Default Model (LiteLLM format)</label>
+                                <input type="text" id="default-model" placeholder="ollama/llama3.2" value="ollama/llama3.2">
+                            </div>
+                        </div>
+                        <div class="setting-group">
+                            <h3>Proxy Settings</h3>
+                            <div class="form-group">
+                                <label>Proxy Port</label>
+                                <input type="number" id="proxy-port" value="8080">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- New Project Modal -->
+        <div id="new-project-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Create New Project</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <form id="new-project-form">
+                    <div class="form-group">
+                        <label for="project-name-input">Project Name</label>
+                        <input type="text" id="project-name-input" placeholder="My Security Test" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="project-prompt">Describe your test (natural language)</label>
+                        <textarea id="project-prompt" rows="6" placeholder="Scan https://example.com for XSS and SQL injection vulnerabilities.
+
+Scope: Only test example.com and api.example.com
+Exclude: /logout, /admin paths
+Authentication: Bearer token abc123
+Rate limit: 10 requests per second" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="model-select">AI Model</label>
+                        <input type="text" id="model-select" placeholder="ollama/llama3.2">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Project</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Finding Detail Modal -->
+        <div id="finding-modal" class="modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2 id="finding-title">Finding Title</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="finding-detail">
+                    <div class="finding-meta">
+                        <span id="finding-severity" class="severity-badge">HIGH</span>
+                        <span id="finding-type" class="type-badge">XSS</span>
+                        <span id="finding-verified" class="verified-badge">Verified</span>
+                    </div>
+                    <div class="finding-section">
+                        <h4>Affected URL</h4>
+                        <code id="finding-url"></code>
+                    </div>
+                    <div class="finding-section">
+                        <h4>Description</h4>
+                        <p id="finding-description"></p>
+                    </div>
+                    <div class="finding-section">
+                        <h4>Reproduction Steps</h4>
+                        <div id="finding-repro" class="repro-steps"></div>
+                    </div>
+                    <div class="finding-section">
+                        <h4>Proof of Concept</h4>
+                        <pre><code id="finding-poc"></code></pre>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="mark-verified-btn" class="btn btn-primary">✓ Mark Verified</button>
+                        <button id="mark-fp-btn" class="btn btn-secondary">✗ False Positive</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

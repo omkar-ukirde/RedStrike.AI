@@ -1,0 +1,57 @@
+FROM kalilinux/kali-rolling
+
+# Update and install pentesting tools
+RUN apt-get update && apt-get install -y \
+    # Reconnaissance Tools
+    nmap \
+    whatweb \
+    wafw00f \
+    dnsrecon \
+    amass \
+    # Content Discovery
+    gobuster \
+    feroxbuster \
+    # Vulnerability Scanning
+    nikto \
+    # Web Fuzzing
+    sqlmap \
+    # Utilities
+    curl \
+    wget \
+    git \
+    jq \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Go-based tools
+RUN apt-get update && apt-get install -y golang && rm -rf /var/lib/apt/lists/*
+
+ENV GOPATH=/root/go
+ENV PATH=$PATH:/root/go/bin
+
+# Install Go tools
+RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
+    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
+    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
+    go install -v github.com/ffuf/ffuf/v2@latest && \
+    go install -v github.com/hahwul/dalfox/v2@latest && \
+    go install -v github.com/projectdiscovery/katana/cmd/katana@latest && \
+    go install -v github.com/tomnomnom/waybackurls@latest
+
+# Install Python tools
+RUN pip3 install --break-system-packages \
+    arjun \
+    git+https://github.com/devanshbatham/ParamSpider.git
+
+# Clone SecLists wordlists
+RUN git clone --depth 1 https://github.com/danielmiessler/SecLists.git /wordlists
+
+# Update Nuclei templates
+RUN nuclei -update-templates
+
+# Create working directory
+WORKDIR /data
+
+# Keep container running
+CMD ["tail", "-f", "/dev/null"]

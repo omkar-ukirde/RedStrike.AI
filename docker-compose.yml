@@ -1,0 +1,64 @@
+services:
+  # FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: redstrike-app
+    ports:
+      - "9000:9000"
+      - "8080:8080" # Proxy port
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://redstrike:redstrike@db:5432/redstrike
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./skills:/app/skills
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - db
+      - kali
+    networks:
+      - redstrike-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: redstrike-db
+    environment:
+      POSTGRES_USER: redstrike
+      POSTGRES_PASSWORD: redstrike
+      POSTGRES_DB: redstrike
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - redstrike-network
+    restart: unless-stopped
+
+  # Kali Linux Container for Tool Execution
+  kali:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.kali
+    container_name: redstrike-kali
+    privileged: true
+    volumes:
+      - kali_data:/data
+      - ./skills:/skills:ro
+    networks:
+      - redstrike-network
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+
+networks:
+  redstrike-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  kali_data:
