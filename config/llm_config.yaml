@@ -1,0 +1,146 @@
+# RedStrike.AI LLM Configuration
+# User can configure any combination of providers per agent
+# Supported providers: ollama, openai, anthropic, vllm, together, groq, azure, google
+
+# Default provider settings (used when agent-specific config not provided)
+default:
+  provider: "ollama"
+  api_base: "http://localhost:11434"
+  api_key: null
+  model: "qwen2.5:7b"
+  temperature: 0.1
+  max_tokens: 4096
+
+# Agent-specific configurations
+# Each agent can use a different provider and model
+agents:
+  # Main orchestrator - needs strong reasoning
+  orchestrator:
+    provider: "ollama"
+    model: "qwen2.5:14b"
+    api_base: "http://localhost:11434"
+    # For OpenAI: provider: "openai", model: "gpt-4o", api_key: "${OPENAI_API_KEY}"
+    # For Anthropic: provider: "anthropic", model: "claude-sonnet-4-20250514", api_key: "${ANTHROPIC_API_KEY}"
+    temperature: 0.1
+    max_tokens: 4096
+  
+  # Network reconnaissance
+  network_recon:
+    provider: "ollama"
+    model: "mistral:7b"
+    api_base: "http://localhost:11434"
+  
+  # Web reconnaissance
+  web_recon:
+    provider: "ollama"
+    model: "mistral:7b"
+    api_base: "http://localhost:11434"
+  
+  # Code analysis (whitebox testing)
+  code_analyzer:
+    provider: "ollama"
+    model: "qwen2.5-coder:14b"
+    api_base: "http://localhost:11434"
+  
+  # Endpoint discovery
+  endpoint_discovery:
+    provider: "ollama"
+    model: "mistral:7b"
+    api_base: "http://localhost:11434"
+  
+  # Parameter discovery
+  param_discovery:
+    provider: "ollama"
+    model: "mistral:7b"
+    api_base: "http://localhost:11434"
+  
+  # Injection testing (XSS, SQLi, SSRF, etc.)
+  injection_tester:
+    provider: "ollama"
+    model: "qwen2.5-coder:14b"
+    api_base: "http://localhost:11434"
+  
+  # Authentication testing (IDOR, auth bypass, etc.)
+  auth_tester:
+    provider: "ollama"
+    model: "qwen2.5:7b"
+    api_base: "http://localhost:11434"
+  
+  # Configuration testing (headers, SSL, misconfigs)
+  config_tester:
+    provider: "ollama"
+    model: "qwen2.5:7b"
+    api_base: "http://localhost:11434"
+  
+  # Business logic testing
+  logic_tester:
+    provider: "ollama"
+    model: "qwen2.5:7b"
+    api_base: "http://localhost:11434"
+  
+  # Vulnerability scanner (CVE, nuclei)
+  vuln_scanner:
+    provider: "ollama"
+    model: "mistral:7b"
+    api_base: "http://localhost:11434"
+  
+  # Verifier (two-step verification + PoC generation)
+  verifier:
+    provider: "ollama"
+    model: "qwen2.5-coder:20b"  # Strong code generation for PoC
+    api_base: "http://localhost:11434"
+    temperature: 0.1
+    max_tokens: 8192
+  
+  # Reporter (report generation)
+  reporter:
+    provider: "ollama"
+    model: "qwen2.5:7b"
+    api_base: "http://localhost:11434"
+
+# Recommended models for each task (shown in UI/docs)
+recommendations:
+  orchestrator: |
+    Strong reasoning models recommended:
+    - Ollama: qwen2.5:14b, deepseek-coder-v2, llama3.1:70b
+    - OpenAI: gpt-4o, gpt-4-turbo
+    - Anthropic: claude-sonnet-4-20250514
+  
+  injection_tester: |
+    Security-focused code models recommended:
+    - Ollama: qwen2.5-coder:14b, codellama:13b
+    - OpenAI: gpt-4o
+  
+  verifier: |
+    Strong code generation models recommended:
+    - Ollama: qwen2.5-coder:20b, deepseek-coder-v2
+    - OpenAI: gpt-4o
+    - Anthropic: claude-sonnet-4-20250514
+  
+  general: |
+    General purpose models:
+    - Ollama: mistral:7b, qwen2.5:7b, llama3.1:8b
+
+# Provider-specific settings
+providers:
+  ollama:
+    default_base: "http://localhost:11434"
+    
+  openai:
+    default_base: "https://api.openai.com/v1"
+    # api_key loaded from OPENAI_API_KEY env var
+    
+  anthropic:
+    default_base: "https://api.anthropic.com"
+    # api_key loaded from ANTHROPIC_API_KEY env var
+    
+  vllm:
+    default_base: "http://localhost:8000/v1"
+    
+  together:
+    default_base: "https://api.together.xyz/v1"
+    # api_key loaded from TOGETHER_API_KEY env var
+    
+  groq:
+    default_base: "https://api.groq.com/openai/v1"
+    # api_key loaded from GROQ_API_KEY env var
