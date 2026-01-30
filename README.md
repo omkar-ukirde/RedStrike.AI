@@ -17,14 +17,15 @@ RedStrike.AI is an **autonomous penetration testing platform** that combines AI 
 
 | Feature | Description |
 |---------|-------------|
-| 🤖 **Multi-Agent System** | Orchestrator + 6 specialized agents (Recon, Discovery, Scanner, Fuzzer, Verifier, Reporter) |
-| 🔧 **30+ Security Tools** | Nmap, Nuclei, SQLmap, Dalfox, ffuf, Katana, and more running in Kali Linux |
+| 🤖 **LangGraph Multi-Agent System** | Orchestrator + 12 specialized subagents with OWASP Top 10 coverage |
+| 🔧 **30+ Security Tools** | Nmap, Nuclei, SQLmap, Dalfox, ffuf, Katana running in Kali Docker |
+| 🐳 **Secure Docker Execution** | All tools execute isolated in Kali Linux container |
+| 🧠 **Multi-Provider LLMs** | Ollama, OpenAI, Anthropic, Groq, Google, Azure, Together, Bedrock |
 | 💬 **Natural Language Input** | Describe your test in plain English - AI handles the rest |
 | 📊 **Real-time Dashboard** | Live WebSocket updates with findings, sitemap, and HTTP history |
-| 📚 **Knowledge Base** | Extensible Markdown skills that enhance agent capabilities |
-| 🔐 **Role-based Auth** | Admin/Tester roles with JWT authentication |
-| 📈 **Report Generation** | Markdown reports with reproduction steps and PoC code |
-| ⏸️ **Resumable Scans** | Pause and resume long-running assessments |
+| 📚 **Extensible Skills** | User-configurable knowledge base in agentskills.io format |
+| ✅ **Two-Step Verification** | All findings verified with detailed PoC before reporting |
+| 📈 **Report Generation** | Markdown reports with reproduction steps and Python PoC code |
 
 ---
 
@@ -101,15 +102,21 @@ docker-compose logs -f app
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       AGENT LAYER (smolagents + LiteLLM)                    │
+│                       AGENT LAYER (LangGraph Deep Agents)                   │
 │                                                                             │
 │  ┌──────────────┐    ┌───────────────────────────────────────────────────┐ │
-│  │ Orchestrator │───▶│  Recon → Discovery → Scanner → Fuzzer → Verifier │ │
+│  │ Orchestrator │───▶│  12 Specialized Subagents (OWASP Top 10 Coverage) │ │
+│  └──────────────┘    │  • Recon (Network, Web)                           │ │
+│         │            │  • Discovery (Endpoint, Param, Code)              │ │
+│         ▼            │  • Testing (Injection, Auth, Config, Logic)       │ │
+│  ┌──────────────┐    │  • Scanning (Vuln Scanner)                        │ │
+│  │   Reporter   │    │  • Verification (Two-Step PoC)                    │ │
 │  └──────────────┘    └───────────────────────────────────────────────────┘ │
 │         │                              │                                    │
 │         ▼                              ▼                                    │
 │  ┌──────────────┐              ┌──────────────┐                            │
-│  │   Reporter   │              │   Skills KB  │                            │
+│  │ LLM Router   │              │   Skills KB  │                            │
+│  │ (8 Providers)│              │ (SKILL.md)   │                            │
 │  └──────────────┘              └──────────────┘                            │
 └─────────────────────────────────────────────────────────────────────────────┘
          │                               │
@@ -162,14 +169,20 @@ ADMIN_EMAIL=admin@redstrike.ai
 ADMIN_PASSWORD=changeme123  # Auto-generates secure password on first run
 ```
 
-### Supported Models
+### Supported LLM Providers
 
-| Provider | Example Models |
-|----------|---------------|
-| Ollama | `ollama/llama3.2`, `ollama/mistral`, `ollama/codellama` |
-| OpenAI | `openai/gpt-4o`, `openai/gpt-4-turbo`, `openai/gpt-3.5-turbo` |
-| Anthropic | `anthropic/claude-3-opus`, `anthropic/claude-3-sonnet` |
-| Google | `gemini/gemini-pro` |
+| Provider | Example Models | Config Key |
+|----------|---------------|------------|
+| Ollama | `llama3.2`, `mistral`, `codellama` | `ollama` |
+| OpenAI | `gpt-4o`, `gpt-4-turbo`, `gpt-3.5-turbo` | `openai` |
+| Anthropic | `claude-3-opus`, `claude-3-sonnet` | `anthropic` |
+| Groq | `llama-3.1-70b-versatile`, `mixtral-8x7b` | `groq` |
+| Google | `gemini-1.5-pro`, `gemini-1.5-flash` | `google` |
+| Azure | `gpt-4`, `gpt-35-turbo` | `azure` |
+| Together | `meta-llama/Llama-3-70b-chat-hf` | `together` |
+| Bedrock | `anthropic.claude-3-sonnet` | `bedrock` |
+
+Configure per-agent models in `config/llm_config.yaml`.
 
 ---
 
@@ -311,27 +324,38 @@ skills/
     └── poc_templates.md
 ```
 
-### Skill File Format
+### Skill File Format (agentskills.io)
 
 ```markdown
-# XSS Testing
+---
+name: xss
+description: Cross-Site Scripting testing methodology
+version: 1.0.0
+tags: [injection, client-side, A03:2021]
+---
 
-## Description
-Cross-Site Scripting (XSS) testing methodology...
+# XSS Testing Methodology
 
-## Techniques
+## Types
 1. Reflected XSS - Test search forms, URL parameters
 2. Stored XSS - Test comments, profiles, messages
 3. DOM XSS - Analyze JavaScript sinks and sources
 
 ## Payloads
-- `<script>alert(1)</script>`
-- `"><img src=x onerror=alert(1)>`
-- `javascript:alert(1)`
+```
+<script>alert(1)</script>
+"><img src=x onerror=alert(1)>
+```
 
-## Tools
-- dalfox -u URL -p param
-- Use browser DevTools for DOM analysis
+## PoC Template
+```python
+import requests
+
+def test_xss(url, param):
+    payload = '<script>alert(1)</script>'
+    r = requests.get(url, params={param: payload})
+    return payload in r.text
+```
 ```
 
 ---
@@ -441,8 +465,8 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
-- [smolagents](https://github.com/huggingface/smolagents) - AI Agent framework
-- [LiteLLM](https://github.com/BerriAI/litellm) - Universal LLM API
+- [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration framework
+- [LangChain](https://github.com/langchain-ai/langchain) - LLM application framework
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework
 - [Kali Linux](https://www.kali.org/) - Security tools platform
 - [SecLists](https://github.com/danielmiessler/SecLists) - Security wordlists
