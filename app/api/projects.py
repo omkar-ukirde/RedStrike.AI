@@ -238,6 +238,104 @@ async def pause_project(
     return {"message": "Scan paused", "project_id": project_id}
 
 
+@router.get("/{project_id}/status")
+async def get_scan_status(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current scan status and progress."""
+    from app.services.scan_service import get_scan_progress
+    
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .where(Project.owner_id == current_user["user_id"])
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    progress = get_scan_progress(project_id)
+    
+    return {
+        "project_id": project_id,
+        "project_status": project.status.value,
+        "scan_progress": progress,
+        "started_at": project.started_at.isoformat() if project.started_at else None,
+        "completed_at": project.completed_at.isoformat() if project.completed_at else None,
+    }
+
+
+@router.post("/{project_id}/cancel")
+async def cancel_scan(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Cancel a running scan."""
+    from app.services.scan_service import clear_scan_progress
+    
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .where(Project.owner_id == current_user["user_id"])
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.status != ProjectStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project is not running",
+        )
+    
+    project.status = ProjectStatus.PAUSED
+    clear_scan_progress(project_id)
+    await db.commit()
+    
+    return {"message": "Scan cancelled", "project_id": project_id}
+
+
+@router.delete("/{project_id}/logs")
+async def delete_scan_logs(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete scan logs for a project (Nessus-style cleanup)."""
+    result = await db.execute(
+        select(Project)
+        .where(Project.id == project_id)
+        .where(Project.owner_id == current_user["user_id"])
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.status == ProjectStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete logs for a running project",
+        )
+    
+    # Delete scan records (findings are preserved)
+    from app.models import Scan
+    await db.execute(
+        select(Scan).where(Scan.project_id == project_id).delete()
+    )
+    
+    # Clear state snapshot
+    project.state_snapshot = {}
+    await db.commit()
+    
+    return {"message": "Scan logs deleted", "project_id": project_id}
+
+
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: int,

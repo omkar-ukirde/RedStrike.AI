@@ -9,7 +9,10 @@ import uuid
 from app.agents.state import ScanState, Finding, VerificationStatus
 from app.models.llm_router import get_model_for_agent
 from app.tools import LANGCHAIN_TOOLS  # All Docker-enabled tools for verification
-from app.services.skill_loader import skill_loader
+from app.agents.skill_subagent import (
+    create_skill_aware_subagent,
+    get_skill_categories_for_agent,
+)
 
 SYSTEM_PROMPT = """You are the Verification Subagent for RedStrike.AI.
 
@@ -105,7 +108,8 @@ if __name__ == "__main__":
 
 def create_verifier_subagent(state: ScanState) -> Dict[str, Any]:
     """
-    Verifier subagent node - two-step verification with PoC generation.
+    Verifier subagent node with skill-aware implementation.
+    Two-step verification with PoC generation.
     
     Args:
         state: Current scan state
@@ -127,12 +131,21 @@ def create_verifier_subagent(state: ScanState) -> Dict[str, Any]:
             "false_positives": [],
         }
     
-    # Load relevant skills for PoC generation
-    skill_context = skill_loader.get_skill_context(["exploitation", "vulnerabilities"])
+    # Get skill categories for verifier (exploitation techniques)
+    skill_categories = get_skill_categories_for_agent("verifier")
     
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""Verify the following potential findings for: {target}
+    # Create skill-aware agent with context management
+    # Use higher context limit for verification (needs to hold all findings)
+    agent = create_skill_aware_subagent(
+        model=model,
+        tools=LANGCHAIN_TOOLS,
+        skill_categories=skill_categories,
+        base_prompt=SYSTEM_PROMPT,
+        max_context_messages=30,  # Higher for verification
+        include_skill_references=True,  # Include PoC templates
+    )
+    
+    task_message = f"""Verify the following potential findings for: {target}
 
 Potential Findings:
 {_format_findings_for_verification(potential_findings)}
@@ -142,15 +155,11 @@ For each finding:
 2. If verified: Generate detailed step-by-step PoC
 3. If not reproducible: Mark as false positive
 
-Skills/Knowledge (PoC templates):
-{skill_context if skill_context else "No specific skills loaded."}
+Return verified findings with complete PoC."""
 
-Return verified findings with complete PoC.""")
-    ]
+    messages = [HumanMessage(content=task_message)]
     
     try:
-        from langgraph.prebuilt import create_react_agent
-        agent = create_react_agent(model, LANGCHAIN_TOOLS)  # All Docker tools for PoC
         result = agent.invoke({"messages": messages})
         
         # Parse verification results

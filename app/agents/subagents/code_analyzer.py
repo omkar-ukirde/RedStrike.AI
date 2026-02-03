@@ -7,6 +7,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import ScanState
 from app.models.llm_router import get_model_for_agent
+from app.agents.skill_subagent import (
+    get_skill_system_prompt,
+    get_skill_categories_for_agent,
+)
 from app.services.skill_loader import skill_loader
 
 SYSTEM_PROMPT = """You are the Code Analyzer Subagent for RedStrike.AI.
@@ -51,7 +55,7 @@ Be thorough - code analysis is the most reliable way to find vulnerabilities."""
 
 def create_code_analyzer_subagent(state: ScanState) -> Dict[str, Any]:
     """
-    Code analyzer subagent node (whitebox testing).
+    Code analyzer subagent node with skill-aware implementation (whitebox testing).
     
     Args:
         state: Current scan state
@@ -68,23 +72,27 @@ def create_code_analyzer_subagent(state: ScanState) -> Dict[str, Any]:
             "phase_history": state.get("phase_history", []) + ["code_analysis_skipped"],
         }
     
-    # Load relevant skills
-    skill_context = skill_loader.get_skill_context(["vulnerabilities"])
+    # Get skill categories for code analyzer
+    skill_categories = get_skill_categories_for_agent("code_analyzer")
+    
+    # Build enhanced prompt with skills (code analyzer doesn't use tools)
+    enhanced_prompt = get_skill_system_prompt(
+        SYSTEM_PROMPT,
+        skill_categories,
+        include_references=True,  # Include detailed vulnerability patterns
+    )
     
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=enhanced_prompt),
         HumanMessage(content=f"""Perform code analysis on repository: {code_url}
 
 Target application: {state["target"]["url"]}
-
-Skills/Knowledge:
-{skill_context if skill_context else "No specific skills loaded."}
 
 Analyze the code for security vulnerabilities and return structured findings.""")
     ]
     
     try:
-        # Code analyzer doesn't use tools - pure LLM reasoning
+        # Code analyzer doesn't use tools - pure LLM reasoning with skill knowledge
         result = model.invoke(messages)
         
         # Parse findings from code analysis

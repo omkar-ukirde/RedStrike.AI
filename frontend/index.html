@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RedStrike.AI - Web Pentesting Platform</title>
     <link rel="stylesheet" href="css/styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div id="app">
         <!-- Login Screen -->
@@ -81,12 +84,26 @@
                         <div class="project-actions">
                             <button id="start-scan-btn" class="btn btn-primary">▶ Start Scan</button>
                             <button id="pause-scan-btn" class="btn btn-secondary" style="display:none">⏸ Pause</button>
+                            <button id="cancel-scan-btn" class="btn btn-danger" style="display:none">✕ Cancel</button>
                             <button id="export-btn" class="btn btn-secondary">📥 Export CSV</button>
+                            <button id="delete-logs-btn" class="btn btn-text" style="display:none">🗑️ Delete
+                                Logs</button>
                         </div>
                     </div>
                     <div class="project-status-bar">
                         <span id="project-status" class="status-badge">Pending</span>
                         <span id="project-target"></span>
+                    </div>
+                    <!-- Progress Bar -->
+                    <div id="progress-container" class="progress-container">
+                        <div class="progress-info">
+                            <span id="phase-text">Pending</span>
+                            <span id="progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div id="progress-bar" class="progress-bar-fill" style="width: 0%" role="progressbar"
+                                aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
                     </div>
                     <div class="project-tabs">
                         <button class="tab-btn active" data-tab="scan-log">Scan Log</button>
@@ -160,7 +177,8 @@
                             <h3>Model Configuration</h3>
                             <div class="form-group">
                                 <label>Default Model (LiteLLM format)</label>
-                                <input type="text" id="default-model" placeholder="ollama/llama3.2" value="ollama/llama3.2">
+                                <input type="text" id="default-model" placeholder="ollama/llama3.2"
+                                    value="ollama/llama3.2">
                             </div>
                         </div>
                         <div class="setting-group">
@@ -250,4 +268,5 @@ Rate limit: 10 requests per second" required></textarea>
     <script src="js/websocket.js"></script>
     <script src="js/app.js"></script>
 </body>
+
 </html>

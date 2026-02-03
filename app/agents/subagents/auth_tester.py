@@ -9,7 +9,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.state import ScanState
 from app.models.llm_router import get_model_for_agent
 from app.tools import INJECTION_LANGCHAIN_TOOLS  # Docker-enabled tools
-from app.services.skill_loader import skill_loader
+from app.agents.skill_subagent import (
+    create_skill_aware_subagent,
+    get_skill_categories_for_agent,
+)
 
 SYSTEM_PROMPT = """You are the Authentication Tester Subagent for RedStrike.AI.
 
@@ -66,7 +69,7 @@ Output Format:
 
 def create_auth_tester_subagent(state: ScanState) -> Dict[str, Any]:
     """
-    Authentication tester subagent node.
+    Authentication tester subagent node with skill-aware implementation.
     
     Args:
         state: Current scan state
@@ -78,31 +81,35 @@ def create_auth_tester_subagent(state: ScanState) -> Dict[str, Any]:
     target = state["target"]["url"]
     credentials = state["target"].get("credentials", {})
     
-    # Load relevant skills
-    skill_context = skill_loader.get_skill_context(["vulnerabilities"])
+    # Get skill categories for this agent type
+    skill_categories = get_skill_categories_for_agent("auth_tester")
+    
+    # Create skill-aware agent with context management
+    agent = create_skill_aware_subagent(
+        model=model,
+        tools=INJECTION_LANGCHAIN_TOOLS,
+        skill_categories=skill_categories,
+        base_prompt=SYSTEM_PROMPT,
+        max_context_messages=25,
+        include_skill_references=True,  # Include JWT attack details, etc.
+    )
     
     # Get discovered endpoints
     discovery = state.get("discovery_results", {})
     
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""Test for authentication vulnerabilities on: {target}
+    task_message = f"""Test for authentication vulnerabilities on: {target}
 
 Credentials available: {"Yes" if credentials else "No (blackbox)"}
 Credential type: {credentials.get("type", "none") if credentials else "none"}
 
 Discovered endpoints: {discovery.get("endpoints", {})}
 
-Skills/Knowledge:
-{skill_context if skill_context else "No specific skills loaded."}
-
 Test for IDOR, auth bypass, session issues, JWT attacks.
-Mark all findings as verification_status: "pending".""")
-    ]
+Mark all findings as verification_status: "pending"."""
+
+    messages = [HumanMessage(content=task_message)]
     
     try:
-        from langgraph.prebuilt import create_react_agent
-        agent = create_react_agent(model, INJECTION_LANGCHAIN_TOOLS)  # Docker execution
         result = agent.invoke({"messages": messages})
         
         potential_findings = state.get("potential_findings", [])

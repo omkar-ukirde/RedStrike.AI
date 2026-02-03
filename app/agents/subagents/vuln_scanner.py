@@ -9,7 +9,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.state import ScanState
 from app.models.llm_router import get_model_for_agent
 from app.tools import SCANNER_LANGCHAIN_TOOLS  # Docker-enabled tools
-from app.services.skill_loader import skill_loader
+from app.agents.skill_subagent import (
+    create_skill_aware_subagent,
+    get_skill_categories_for_agent,
+)
 
 SYSTEM_PROMPT = """You are the Vulnerability Scanner Subagent for RedStrike.AI.
 
@@ -67,7 +70,7 @@ Output Format:
 
 def create_vuln_scanner_subagent(state: ScanState) -> Dict[str, Any]:
     """
-    Vulnerability scanner subagent node.
+    Vulnerability scanner subagent node with skill-aware implementation.
     
     Args:
         state: Current scan state
@@ -78,25 +81,35 @@ def create_vuln_scanner_subagent(state: ScanState) -> Dict[str, Any]:
     model = get_model_for_agent("vuln_scanner")
     target = state["target"]["url"]
     
+    # Get skill categories for this agent type
+    skill_categories = get_skill_categories_for_agent("vuln_scanner")
+    
+    # Create skill-aware agent with context management
+    agent = create_skill_aware_subagent(
+        model=model,
+        tools=SCANNER_LANGCHAIN_TOOLS,
+        skill_categories=skill_categories,
+        base_prompt=SYSTEM_PROMPT,
+        max_context_messages=20,
+        include_skill_references=False,
+    )
+    
     # Get recon and discovery results for context
     recon = state.get("recon_results", {})
     discovery = state.get("discovery_results", {})
     
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""Run vulnerability scanners on: {target}
+    task_message = f"""Run vulnerability scanners on: {target}
 
 Technologies detected: {recon.get("web", {}).get("technologies", [])}
 Endpoints discovered: {discovery.get("endpoints", {})}
 
 Run nuclei scans for CVEs and known vulnerabilities.
 Prioritize critical and high severity findings.
-Mark all findings as verification_status: "pending".""")
-    ]
+Mark all findings as verification_status: "pending"."""
+
+    messages = [HumanMessage(content=task_message)]
     
     try:
-        from langgraph.prebuilt import create_react_agent
-        agent = create_react_agent(model, SCANNER_LANGCHAIN_TOOLS)  # Docker execution
         result = agent.invoke({"messages": messages})
         
         potential_findings = state.get("potential_findings", [])

@@ -210,8 +210,12 @@ Focus on:
 Rate limit: Maximum 10 requests per second
 ```
 
-4. Click **"Create & Start Scan"**
-5. Monitor progress in real-time via the dashboard
+4. Click **"Create Project"**
+5. Review the project configuration
+6. Click **"▶ Start Scan"** to begin scanning
+7. Monitor progress in real-time via the dashboard
+8. Use **"Pause"** or **"Cancel"** to control the scan
+9. Delete scan logs when no longer needed (findings are preserved)
 
 ### Dashboard Views
 
@@ -280,6 +284,9 @@ curl http://localhost:9000/api/projects/1/export \
 | `/api/projects/{id}/endpoints` | GET | List discovered endpoints |
 | `/api/projects/{id}/sitemap` | GET | Get sitemap tree |
 | `/api/projects/{id}/history` | GET | Get HTTP history |
+| `/api/projects/{id}/status` | GET | Get scan progress (async polling) |
+| `/api/projects/{id}/cancel` | POST | Cancel running scan |
+| `/api/projects/{id}/logs` | DELETE | Delete scan logs (keeps findings) |
 | `/api/projects/{id}/export` | GET | Export as CSV |
 | `/ws/projects/{id}` | WebSocket | Real-time updates |
 
@@ -427,10 +434,10 @@ The following features are planned for future releases:
 
 | Task | Description | Status |
 |------|-------------|--------|
-| **CodeAgent Sandboxing** | Run smolagents CodeAgent generated Python in Docker sandbox | ⏳ Pending |
 | **Logging Improvements** | Structured JSON logging, log aggregation support | ⏳ Pending |
 | **API Pagination** | Add pagination to list endpoints (findings, endpoints, history) | ⏳ Pending |
 | **Caching** | Add Redis caching for frequently accessed data | ⏳ Pending |
+| ~~**CodeAgent Sandboxing**~~ | ~~Run smolagents CodeAgent generated Python in Docker sandbox~~ | ✅ Removed (LangGraph) |
 | **Health Checks** | Add Docker health checks and `/health` endpoint | ⏳ Pending |
 | **CI/CD Pipeline** | GitHub Actions for testing, linting, and Docker builds | ⏳ Pending |
 
@@ -439,7 +446,6 @@ The following features are planned for future releases:
 | Issue | Description | Workaround |
 |-------|-------------|------------|
 | **Ollama in Docker** | Ollama running on host requires `host.docker.internal` URL | Auto-replaced in code |
-| **smolagents API changes** | Library API evolves frequently | Pin version in requirements |
 | **Long scans timeout** | Very long scans may hit timeouts | Pause and resume |
 
 ---

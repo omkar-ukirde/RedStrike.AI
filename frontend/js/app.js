@@ -1,10 +1,12 @@
 /**
  * RedStrike.AI - Main Application
+ * Enterprise-grade UI with async scanning
  */
 
 // State
 let currentProject = null;
 let unsubscribe = null;
+let stopPolling = null;
 
 // DOM Elements
 const loginScreen = document.getElementById('login-screen');
@@ -71,12 +73,15 @@ function setupEventListeners() {
         switchView('projects');
         currentProject = null;
         if (unsubscribe) unsubscribe();
+        if (stopPolling) stopPolling();
     });
 
     // Scan controls
     document.getElementById('start-scan-btn').addEventListener('click', handleStartScan);
     document.getElementById('pause-scan-btn').addEventListener('click', handlePauseScan);
+    document.getElementById('cancel-scan-btn')?.addEventListener('click', handleCancelScan);
     document.getElementById('export-btn').addEventListener('click', handleExport);
+    document.getElementById('delete-logs-btn')?.addEventListener('click', handleDeleteLogs);
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -194,6 +199,11 @@ async function openProject(projectId) {
             onScanComplete: handleScanComplete,
         });
 
+        // Start status polling if scan is running
+        if (currentProject.status === 'running') {
+            startProgressPolling(projectId);
+        }
+
         // Load findings
         loadProjectFindings(projectId);
 
@@ -213,18 +223,65 @@ function renderProjectDetail(project) {
     statusEl.textContent = project.status;
     statusEl.className = `status-badge status-${project.status}`;
 
-    // Update buttons
+    // Update buttons based on status
     const startBtn = document.getElementById('start-scan-btn');
     const pauseBtn = document.getElementById('pause-scan-btn');
+    const cancelBtn = document.getElementById('cancel-scan-btn');
+    const deleteLogsBtn = document.getElementById('delete-logs-btn');
 
     if (project.status === 'running') {
         startBtn.style.display = 'none';
         pauseBtn.style.display = 'block';
+        if (cancelBtn) cancelBtn.style.display = 'block';
+        if (deleteLogsBtn) deleteLogsBtn.style.display = 'none';
     } else {
         startBtn.style.display = 'block';
         pauseBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (deleteLogsBtn) deleteLogsBtn.style.display = 'block';
         startBtn.textContent = project.status === 'paused' ? '▶ Resume' : '▶ Start Scan';
     }
+
+    // Update progress bar
+    updateProgressBar({ progress_percent: 0, phase: project.status });
+}
+
+function updateProgressBar(progress) {
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const phaseText = document.getElementById('phase-text');
+
+    if (progressContainer && progressBar) {
+        progressBar.style.width = `${progress.progress_percent || 0}%`;
+        progressBar.setAttribute('aria-valuenow', progress.progress_percent || 0);
+    }
+    if (progressText) {
+        progressText.textContent = `${progress.progress_percent || 0}%`;
+    }
+    if (phaseText) {
+        phaseText.textContent = progress.phase || 'Pending';
+    }
+}
+
+function startProgressPolling(projectId) {
+    stopPolling = api.startStatusPolling(projectId, (error, status) => {
+        if (error) {
+            console.error('Status poll error:', error);
+            return;
+        }
+
+        if (status && status.scan_progress) {
+            updateProgressBar(status.scan_progress);
+
+            // Update status badge
+            const statusEl = document.getElementById('project-status');
+            if (statusEl) {
+                statusEl.textContent = status.project_status;
+                statusEl.className = `status-badge status-${status.project_status}`;
+            }
+        }
+    });
 }
 
 async function loadProjectFindings(projectId) {
@@ -258,23 +315,29 @@ function renderFindings(findings) {
     });
 }
 
-// Create Project
+// Create Project (no auto-start)
 async function handleCreateProject(e) {
     e.preventDefault();
+    showLoadingState('new-project-form');
 
     const name = document.getElementById('project-name-input').value;
     const prompt = document.getElementById('project-prompt').value;
     const model = document.getElementById('model-select').value || null;
 
     try {
-        await api.createProject(name, prompt, model);
+        const project = await api.createProject(name, prompt, model);
         closeAllModals();
+        hideLoadingState('new-project-form');
         loadProjects();
 
         // Clear form
         document.getElementById('project-name-input').value = '';
         document.getElementById('project-prompt').value = '';
+
+        // Show success message
+        showToast(`Project "${name}" created. Click "Start Scan" to begin.`);
     } catch (error) {
+        hideLoadingState('new-project-form');
         alert('Failed to create project: ' + error.message);
     }
 }
@@ -282,13 +345,20 @@ async function handleCreateProject(e) {
 // Scan Controls
 async function handleStartScan() {
     if (!currentProject) return;
+    showLoadingState('start-scan-btn');
+
     try {
         await api.startProject(currentProject.id);
         currentProject.status = 'running';
         renderProjectDetail(currentProject);
         addLogEntry('system', 'Scan started...');
+
+        // Start polling for progress
+        startProgressPolling(currentProject.id);
     } catch (error) {
         alert('Failed to start scan: ' + error.message);
+    } finally {
+        hideLoadingState('start-scan-btn');
     }
 }
 
@@ -299,8 +369,37 @@ async function handlePauseScan() {
         currentProject.status = 'paused';
         renderProjectDetail(currentProject);
         addLogEntry('system', 'Scan paused');
+        if (stopPolling) stopPolling();
     } catch (error) {
         alert('Failed to pause scan: ' + error.message);
+    }
+}
+
+async function handleCancelScan() {
+    if (!currentProject) return;
+    if (!confirm('Are you sure you want to cancel this scan?')) return;
+
+    try {
+        await api.cancelScan(currentProject.id);
+        currentProject.status = 'paused';
+        renderProjectDetail(currentProject);
+        addLogEntry('system', 'Scan cancelled');
+        if (stopPolling) stopPolling();
+    } catch (error) {
+        alert('Failed to cancel scan: ' + error.message);
+    }
+}
+
+async function handleDeleteLogs() {
+    if (!currentProject) return;
+    if (!confirm('Delete all scan logs for this project? Findings will be preserved.')) return;
+
+    try {
+        await api.deleteScanLogs(currentProject.id);
+        document.getElementById('scan-log-content').innerHTML = '<p class="log-empty">Logs deleted</p>';
+        showToast('Scan logs deleted');
+    } catch (error) {
+        alert('Failed to delete logs: ' + error.message);
     }
 }
 
@@ -321,6 +420,7 @@ function handleScanUpdate(data) {
     if (data.status === 'completed' || data.status === 'failed') {
         currentProject.status = data.status;
         renderProjectDetail(currentProject);
+        if (stopPolling) stopPolling();
     }
 }
 
@@ -333,6 +433,7 @@ function handleScanComplete(summary) {
     addLogEntry('system', `Scan complete! Found ${summary.findings} vulnerabilities.`);
     currentProject.status = 'completed';
     renderProjectDetail(currentProject);
+    if (stopPolling) stopPolling();
 }
 
 function addLogEntry(phase, message) {
@@ -473,6 +574,41 @@ function openModal(modalId) {
 
 function closeAllModals() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+}
+
+// Loading States
+function showLoadingState(elementId) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        el.classList.add('loading');
+        el.disabled = true;
+    }
+}
+
+function hideLoadingState(elementId) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        el.classList.remove('loading');
+        el.disabled = false;
+    }
+}
+
+// Toast Notifications
+function showToast(message, duration = 3000) {
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.classList.add('show');
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
 }
 
 // Utilities

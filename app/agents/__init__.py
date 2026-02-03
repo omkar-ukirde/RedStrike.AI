@@ -1,21 +1,9 @@
-# Agents Package
-from app.agents.base import BaseAgent, LiteLLMModel
+# Agents Package - LangGraph-based agents for RedStrike.AI
 from app.agents.orchestrator import OrchestratorAgent
-from app.agents.recon import ReconAgent
-from app.agents.discovery import DiscoveryAgent
-from app.agents.vuln_scanner import VulnScannerAgent
-from app.agents.fuzzer import FuzzerAgent
-from app.agents.verifier import VerifierAgent
-from app.agents.reporter import ReporterAgent
+from app.agents.base import setup_llm_environment, get_ollama_base_url
 
 __all__ = [
-    "BaseAgent",
-    "LiteLLMModel",
     "OrchestratorAgent",
-    "ReconAgent",
-    "DiscoveryAgent",
-    "VulnScannerAgent",
-    "FuzzerAgent",
-    "VerifierAgent",
-    "ReporterAgent",
+    "setup_llm_environment",
+    "get_ollama_base_url",
 ]

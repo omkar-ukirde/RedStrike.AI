@@ -8,7 +8,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.state import ScanState
 from app.models.llm_router import get_model_for_agent
 from app.tools import RECON_LANGCHAIN_TOOLS  # Docker-enabled tools
-from app.services.skill_loader import skill_loader
+from app.agents.skill_subagent import (
+    create_skill_aware_subagent,
+    get_skill_categories_for_agent,
+)
 
 SYSTEM_PROMPT = """You are the Network Reconnaissance Subagent for RedStrike.AI.
 
@@ -38,7 +41,7 @@ Always respect scope and rate limits. Only scan authorized targets."""
 
 def create_network_recon_subagent(state: ScanState) -> Dict[str, Any]:
     """
-    Network reconnaissance subagent node.
+    Network reconnaissance subagent node with skill-aware implementation.
     
     Args:
         state: Current scan state
@@ -49,26 +52,29 @@ def create_network_recon_subagent(state: ScanState) -> Dict[str, Any]:
     model = get_model_for_agent("network_recon")
     target = state["target"]["url"]
     
-    # Load relevant skills
-    skill_context = skill_loader.get_skill_context(["reconnaissance"])
+    # Get skill categories for this agent type
+    skill_categories = get_skill_categories_for_agent("network_recon")
     
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""Perform network reconnaissance on: {target}
+    # Create skill-aware agent with context management
+    agent = create_skill_aware_subagent(
+        model=model,
+        tools=RECON_LANGCHAIN_TOOLS,
+        skill_categories=skill_categories,
+        base_prompt=SYSTEM_PROMPT,
+        max_context_messages=20,
+        include_skill_references=False,  # Network recon is quick
+    )
+    
+    task_message = f"""Perform network reconnaissance on: {target}
 
 Scope: {state["target"].get("scope", {})}
 Rate Limit: {state["target"].get("rate_limit", {})}
 
-Skills/Knowledge:
-{skill_context if skill_context else "No specific skills loaded."}
+Execute the reconnaissance and return structured results."""
 
-Execute the reconnaissance and return structured results.""")
-    ]
+    messages = [HumanMessage(content=task_message)]
     
     try:
-        # Create agent with Docker-enabled tools
-        from langgraph.prebuilt import create_react_agent
-        agent = create_react_agent(model, RECON_LANGCHAIN_TOOLS)
         result = agent.invoke({"messages": messages})
         
         # Update recon results

@@ -24,8 +24,7 @@ langchain-anthropic>=0.2.0
 langchain-groq>=0.2.0
 langchain-google-genai>=2.0.0
 
-# Legacy support (can be removed after migration)
-smolagents>=1.2.0
+# LLM Provider Routing
 litellm>=1.55.0
 
 # Proxy
