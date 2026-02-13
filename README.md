@@ -56,7 +56,7 @@ RedStrike.AI is an **autonomous penetration testing platform** that combines AI 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/RedStrike.AI.git
+git clone https://github.com/omkar-ukirde/RedStrike.AI.git
 cd RedStrike.AI
 
 # Copy environment file
