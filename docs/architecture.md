@@ -41,11 +41,11 @@ RedStrike.AI is a **3-container microservice** application that automates web pe
 
 ```mermaid
 graph TB
-    User["👤 User<br/>(Browser)"] -->|REST + WebSocket| App["🖥️ FastAPI App<br/>(Port 9000)"]
-    App -->|SQL| DB["🗄️ PostgreSQL<br/>(Port 5432)"]
-    App -->|Docker SDK<br/>exec_run()| Kali["🐉 Kali Linux<br/>(30+ Tools)"]
-    App -->|HTTP| LLM["🧠 LLM Provider<br/>(Ollama/OpenAI/...)"]
-    App -->|File I/O| Skills["📚 Skills<br/>(46 SKILL.md files)"]
+    User["User - Browser"] -->|REST + WebSocket| App["FastAPI App - Port 9000"]
+    App -->|SQL| DB["PostgreSQL - Port 5432"]
+    App -->|Docker SDK exec_run| Kali["Kali Linux - 30+ Tools"]
+    App -->|HTTP| LLM["LLM Provider - Ollama, OpenAI, etc"]
+    App -->|File IO| Skills["Skills - 46 SKILL.md files"]
 
     style App fill:#e74c3c,color:#fff
     style DB fill:#3498db,color:#fff
@@ -93,29 +93,29 @@ litellm>=1.55.0
 
 ```mermaid
 graph LR
-    subgraph Docker["Docker Compose Network (redstrike-network)"]
+    subgraph Docker["Docker Compose Network"]
         subgraph AppContainer["redstrike-app"]
-            FastAPI["FastAPI<br/>:9000"]
-            AgentGraph["LangGraph<br/>Deep Agents"]
+            FastAPI["FastAPI :9000"]
+            AgentGraph["LangGraph Deep Agents"]
             SkillLoader["Skill Loader"]
             DockerExec["Docker Executor"]
         end
 
         subgraph DBContainer["redstrike-db"]
-            Postgres["PostgreSQL 16<br/>:5432"]
+            Postgres["PostgreSQL 16 :5432"]
         end
 
         subgraph KaliContainer["redstrike-kali"]
-            Tools["nmap, nuclei,<br/>sqlmap, ffuf,<br/>dalfox, katana,<br/>nikto, subfinder..."]
-            SecLists["SecLists<br/>Wordlists"]
+            Tools["nmap, nuclei, sqlmap, ffuf, dalfox, katana"]
+            SecLists["SecLists Wordlists"]
         end
     end
 
-    Host["Host Machine"] -->|:9000| FastAPI
-    Host -->|:5432| Postgres
+    Host["Host Machine"] -->|port 9000| FastAPI
+    Host -->|port 5432| Postgres
     FastAPI -->|asyncpg| Postgres
-    DockerExec -->|docker.sock<br/>exec_run()| KaliContainer
-    AgentGraph -->|HTTP| LLM["LLM Provider<br/>(localhost:11434<br/>or cloud API)"]
+    DockerExec -->|docker.sock| KaliContainer
+    AgentGraph -->|HTTP| LLM["LLM Provider"]
 
     style AppContainer fill:#e74c3c,color:#fff
     style DBContainer fill:#3498db,color:#fff
@@ -147,29 +147,29 @@ RedStrike uses the **LangGraph Deep Agents** pattern — a hierarchical multi-ag
 
 ```mermaid
 graph TD
-    Entry["Entry Point"] --> Orch["🎯 Orchestrator<br/>(parse prompt, create plan)"]
+    Entry["Entry Point"] --> Orch["Orchestrator"]
 
-    Orch -->|"recon enabled"| NR["🔭 Network Recon"]
-    Orch -->|"skip to discovery"| ED["📂 Endpoint Discovery"]
-    Orch -->|"skip to testing"| IT["💉 Injection Tester"]
+    Orch -->|recon enabled| NR["Network Recon"]
+    Orch -->|skip to discovery| ED["Endpoint Discovery"]
+    Orch -->|skip to testing| IT["Injection Tester"]
 
-    NR --> WR["🌐 Web Recon"]
-    WR -->|"code_url?"| CA["📝 Code Analyzer"]
-    WR -->|"discovery"| ED
-    WR -->|"skip to testing"| IT
-    WR -->|"skip to report"| RP["📄 Reporter"]
+    NR --> WR["Web Recon"]
+    WR -->|has code_url| CA["Code Analyzer"]
+    WR -->|discovery| ED
+    WR -->|skip to testing| IT
+    WR -->|skip to report| RP["Reporter"]
 
     CA --> ED
-    ED --> PD["🔍 Param Discovery"]
-    PD -->|"testing"| IT
-    PD -->|"skip to report"| RP
+    ED --> PD["Param Discovery"]
+    PD -->|testing| IT
+    PD -->|skip to report| RP
 
-    IT --> AT["🔐 Auth Tester"]
-    AT --> CT["⚙️ Config Tester"]
-    CT --> LT["🧩 Logic Tester"]
-    LT --> VS["🛡️ Vuln Scanner"]
-    VS -->|"findings exist"| VF["✅ Verifier<br/>(Two-Step PoC)"]
-    VS -->|"no findings"| RP
+    IT --> AT["Auth Tester"]
+    AT --> CT["Config Tester"]
+    CT --> LT["Logic Tester"]
+    LT --> VS["Vuln Scanner"]
+    VS -->|findings exist| VF["Verifier - Two-Step PoC"]
+    VS -->|no findings| RP
 
     VF --> RP
     RP --> End["END"]
@@ -210,18 +210,18 @@ The `ScanState` TypedDict is the central data structure flowing through all agen
 ```mermaid
 classDiagram
     class ScanState {
-        +list messages            «Annotated[add_messages]»
+        +list messages
         +TargetConfig target
         +ScanConfig scan_config
         +str current_phase
-        +list~str~ phase_history
+        +list phase_history
         +ReconResults recon_results
         +DiscoveryResults discovery_results
-        +list~Finding~ potential_findings
-        +list~Finding~ verified_findings
-        +list~Finding~ false_positives
+        +list potential_findings
+        +list verified_findings
+        +list false_positives
         +str final_report
-        +list~dict~ errors
+        +list errors
     }
 
     class TargetConfig {
@@ -256,7 +256,7 @@ classDiagram
         +str description
         +str evidence
         +str verification_status
-        +list~str~ poc_steps
+        +list poc_steps
         +str poc_code
         +str owasp_category
     }
@@ -336,10 +336,10 @@ Each subagent uses a `pre_model_hook` to prevent context overflow:
 
 ```mermaid
 graph LR
-    A["All Messages<br/>(potentially 100+)"] --> B["pre_model_hook"]
-    B --> C["System Messages<br/>(always kept)"]
-    B --> D["Most Recent N<br/>Other Messages"]
-    C --> E["Trimmed Context<br/>(max 20 messages)"]
+    A["All Messages - potentially 100+"] --> B["pre_model_hook"]
+    B --> C["System Messages - always kept"]
+    B --> D["Most Recent N Other Messages"]
+    C --> E["Trimmed Context - max 20 messages"]
     D --> E
     E --> F["LLM Call"]
 ```
@@ -354,20 +354,20 @@ The skill system follows the **Agent Skills specification** (agentskills.io) wit
 
 ```mermaid
 graph TD
-    subgraph Level1["Level 1: Summary (~100 tokens)"]
-        S1["name: xss<br/>description: XSS testing...<br/>tags: [injection, A03:2021]<br/>allowed-tools: dalfox curl"]
+    subgraph Level1["Level 1: Summary - ~100 tokens"]
+        S1["name, description, tags, allowed-tools"]
     end
 
-    subgraph Level2["Level 2: Instructions (<5000 tokens)"]
-        S2["Full SKILL.md body<br/>Methodologies, payloads,<br/>techniques, checklists"]
+    subgraph Level2["Level 2: Instructions - under 5000 tokens"]
+        S2["Full SKILL.md body with methodologies and payloads"]
     end
 
-    subgraph Level3["Level 3: References (on demand)"]
-        S3["references/xss.md<br/>references/clickjacking.md<br/>Detailed payloads,<br/>exploitation guides"]
+    subgraph Level3["Level 3: References - on demand"]
+        S3["Detailed technique files in references/ directory"]
     end
 
-    Level1 -->|"Agent activated"| Level2
-    Level2 -->|"Agent needs detail"| Level3
+    Level1 -->|Agent activated| Level2
+    Level2 -->|Agent needs detail| Level3
 
     style Level1 fill:#2ecc71,color:#fff
     style Level2 fill:#f39c12,color:#fff
@@ -425,36 +425,36 @@ The `LLMRouter` class provides **per-agent model routing** — each of the 12 su
 ```mermaid
 graph TD
     subgraph Agents["Agent Requests"]
-        O["Orchestrator<br/>needs: strong reasoning"]
-        IT["Injection Tester<br/>needs: code understanding"]
-        V["Verifier<br/>needs: code generation"]
-        R["Recon Agents<br/>needs: general"]
+        O["Orchestrator - strong reasoning"]
+        IT["Injection Tester - code understanding"]
+        V["Verifier - code generation"]
+        R["Recon Agents - general"]
     end
 
     subgraph Router["LLM Router"]
-        Config["config/llm_config.yaml"]
-        Cache["Model Cache<br/>(per-agent)"]
+        Config["llm_config.yaml"]
+        Cache["Model Cache per-agent"]
         Factory["Model Factory"]
     end
 
     subgraph Providers["8 Supported Providers"]
-        Ollama["Ollama<br/>(local)"]
+        Ollama["Ollama - local"]
         OpenAI["OpenAI"]
         Anthropic["Anthropic"]
         Groq["Groq"]
         Google["Google"]
         Azure["Azure"]
         Together["Together"]
-        vLLM["vLLM<br/>(self-hosted)"]
+        VLLM["vLLM - self-hosted"]
     end
 
-    O -->|"get_model('orchestrator')"| Config
-    IT -->|"get_model('injection_tester')"| Config
-    V -->|"get_model('verifier')"| Config
-    R -->|"get_model('network_recon')"| Config
+    O -->|get_model| Config
+    IT -->|get_model| Config
+    V -->|get_model| Config
+    R -->|get_model| Config
 
     Config --> Cache
-    Cache -->|"cache miss"| Factory
+    Cache -->|cache miss| Factory
     Factory --> Ollama
     Factory --> OpenAI
     Factory --> Anthropic
@@ -462,7 +462,7 @@ graph TD
     Factory --> Google
     Factory --> Azure
     Factory --> Together
-    Factory --> vLLM
+    Factory --> VLLM
 
     style Router fill:#9b59b6,color:#fff
 ```
@@ -564,7 +564,7 @@ erDiagram
         int id PK
         string email UK
         string hashed_password
-        enum role "admin|user"
+        string role
         datetime created_at
     }
 
@@ -578,7 +578,7 @@ erDiagram
         json auth_config
         json rate_limit_config
         string model_name
-        enum status "pending|running|paused|completed|failed"
+        string status
         json state_snapshot
         int owner_id FK
         datetime created_at
@@ -590,9 +590,9 @@ erDiagram
     Scan {
         int id PK
         int project_id FK
-        enum agent_type "orchestrator|recon|discovery|scanner|fuzzer|verifier"
+        string agent_type
         string agent_name
-        enum status "pending|running|completed|failed"
+        string status
         text error
         datetime started_at
         datetime completed_at
@@ -604,8 +604,8 @@ erDiagram
         int scan_id FK
         int endpoint_id FK
         string title
-        enum severity "critical|high|medium|low|info"
-        enum vulnerability_type "xss|sqli|ssrf|idor|lfi|rce|..."
+        string severity
+        string vulnerability_type
         string affected_url
         string affected_parameter
         text description
@@ -632,7 +632,7 @@ erDiagram
         string content_type
         json parameters
         json headers
-        enum discovery_method "crawl|bruteforce|manual|..."
+        string discovery_method
         datetime discovered_at
     }
 
@@ -650,13 +650,13 @@ erDiagram
         datetime timestamp
     }
 
-    User ||--o{ Project : "owns"
-    Project ||--o{ Scan : "has"
-    Project ||--o{ Finding : "has"
-    Project ||--o{ Endpoint : "has"
-    Project ||--o{ HTTPHistory : "has"
-    Scan ||--o{ Finding : "discovers"
-    Endpoint ||--o{ Finding : "has"
+    User ||--o{ Project : owns
+    Project ||--o{ Scan : has
+    Project ||--o{ Finding : has
+    Project ||--o{ Endpoint : has
+    Project ||--o{ HTTPHistory : has
+    Scan ||--o{ Finding : discovers
+    Endpoint ||--o{ Finding : has
 ```
 
 ### Key Design Notes
@@ -675,27 +675,27 @@ erDiagram
 ```mermaid
 graph TD
     subgraph Routes["FastAPI Routers"]
-        Auth["/api/auth/*<br/>login, register, me"]
-        Projects["/api/projects/*<br/>CRUD + scan control"]
-        Findings["/api/projects/{id}/findings/*<br/>list, detail, update"]
-        Endpoints["/api/projects/{id}/endpoints/*<br/>list, sitemap, history"]
-        WS["/ws/projects/{id}<br/>WebSocket"]
-        Health["/api/health<br/>/api/config"]
+        Auth["/api/auth - login, register, me"]
+        Projects["/api/projects - CRUD + scan control"]
+        Findings["/api/projects/id/findings"]
+        Endpoints["/api/projects/id/endpoints"]
+        WS["/ws/projects/id - WebSocket"]
+        Health["/api/health and /api/config"]
     end
 
     subgraph Middleware["Middleware"]
-        CORS["CORS<br/>(allow all origins)"]
-        StaticFiles["StaticFiles<br/>(frontend/)"]
+        CORS["CORS - allow all origins"]
+        StaticFiles["StaticFiles - frontend/"]
     end
 
     subgraph Auth_Layer["Authentication"]
-        JWT["JWT Token<br/>(HS256, 30min expiry)"]
-        Deps["get_current_user<br/>dependency"]
+        JWT["JWT Token HS256, 30min"]
+        Deps["get_current_user dependency"]
     end
 
     subgraph Services["Services"]
-        ScanSvc["ScanService<br/>(BackgroundTasks)"]
-        SkillSvc["SkillLoader<br/>(singleton)"]
+        ScanSvc["ScanService - BackgroundTasks"]
+        SkillSvc["SkillLoader - singleton"]
     end
 
     Routes --> Auth_Layer
