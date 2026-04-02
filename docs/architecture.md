@@ -1,8 +1,8 @@
 # RedStrike.AI — System Architecture
 
-> Detailed architecture document for RedStrike.AI, an autonomous penetration testing platform built on the **LangGraph Deep Agents** framework.
+> Detailed architecture document for RedStrike.AI, an enterprise-grade autonomous penetration testing platform built on **Dynamic Deep Agent Orchestration** with distributed task execution.
 
-**Version:** 1.0.0  
+**Version:** 2.0.0  
 **Last Updated:** April 2026  
 **Author:** Omkar Ukirde
 
@@ -13,42 +13,53 @@
 1. [System Overview](#1-system-overview)
 2. [Technology Stack](#2-technology-stack)
 3. [Deployment Topology](#3-deployment-topology)
-4. [LangGraph Deep Agent Architecture](#4-langgraph-deep-agent-architecture)
-5. [StateGraph & Conditional Routing](#5-stategraph--conditional-routing)
-6. [Subagent Breakdown](#6-subagent-breakdown)
-7. [Skill System (Progressive Disclosure)](#7-skill-system-progressive-disclosure)
-8. [LLM Router (Multi-Provider)](#8-llm-router-multi-provider)
-9. [Tool Execution Pipeline](#9-tool-execution-pipeline)
-10. [Database Schema](#10-database-schema)
-11. [API Layer](#11-api-layer)
-12. [Real-time Communication](#12-real-time-communication)
-13. [Scan Lifecycle & Data Flow](#13-scan-lifecycle--data-flow)
-14. [Security Design](#14-security-design)
-15. [Frontend Architecture](#15-frontend-architecture)
-16. [Key Design Decisions](#16-key-design-decisions)
+4. [Dynamic Agent Engine](#4-dynamic-agent-engine)
+5. [Agent Registry & Lifecycle](#5-agent-registry--lifecycle)
+6. [Agent Factory & Types](#6-agent-factory--types)
+7. [Memory Engine](#7-memory-engine)
+8. [Skill System (Progressive Disclosure)](#8-skill-system-progressive-disclosure)
+9. [LLM Router (Multi-Provider)](#9-llm-router-multi-provider)
+10. [Tool Execution Pipeline](#10-tool-execution-pipeline)
+11. [Database Schema](#11-database-schema)
+12. [API Layer](#12-api-layer)
+13. [Real-time Communication](#13-real-time-communication)
+14. [Scan Lifecycle & Data Flow](#14-scan-lifecycle--data-flow)
+15. [Security Design](#15-security-design)
+16. [Distributed Architecture (Celery + Redis)](#16-distributed-architecture)
+17. [Frontend Architecture (React + Vite)](#17-frontend-architecture)
+18. [Federation Roadmap](#18-federation-roadmap)
+19. [Key Design Decisions](#19-key-design-decisions)
 
 ---
 
 ## 1. System Overview
 
-RedStrike.AI is a **3-container microservice** application that automates web penetration testing using AI agents. A user provides a natural language prompt ("Test example.com for SQL injection and XSS"), and the system:
+RedStrike.AI is a **distributed, multi-container microservice** application that automates enterprise-grade web penetration testing using **dynamically spawned AI agents**. A user provides a natural language prompt, and the system:
 
 1. **Parses** the prompt to extract target URL, scope, authentication, and rate limits
-2. **Plans** an attack strategy across 5 testing phases
-3. **Executes** 30+ security tools in an isolated Kali Linux container
-4. **Verifies** findings with a two-step verification process and PoC generation
-5. **Reports** results with reproduction steps and Python exploit code
+2. **Recalls** memories from previous scans of the same target
+3. **Plans** an attack strategy and **dynamically spawns 10-100+ agents** based on target complexity
+4. **Executes** 30+ security tools across **parallel agents** in isolated, per-scan Kali Linux containers
+5. **Coordinates** inter-agent communication via a PostgreSQL + Redis message bus
+6. **Verifies** findings with dynamically spawned Verifier agents with PoC generation
+7. **Stores** scan memories in PostgreSQL for cross-scan learning
+8. **Reports** results with reproduction steps and Python exploit code
 
 ```mermaid
 graph TB
-    User["User - Browser"] -->|REST + WebSocket| App["FastAPI App - Port 9000"]
-    App -->|SQL| DB["PostgreSQL - Port 5432"]
-    App -->|Docker SDK exec_run| Kali["Kali Linux - 30+ Tools"]
-    App -->|HTTP| LLM["LLM Provider - Ollama, OpenAI, etc"]
+    User["User - React SPA"] -->|REST + WebSocket| App["FastAPI App - Port 9000"]
+    App -->|asyncpg| DB["PostgreSQL 16"]
+    App -->|tasks| Redis["Redis 7"]
+    Redis -->|broker| Celery["Celery Workers"]
+    Celery -->|docker.sock| Kali["Per-Scan Kali Containers"]
+    App -->|HTTP| LLM["LLM Providers"]
     App -->|File IO| Skills["Skills - 46 SKILL.md files"]
+    Celery -->|results| DB
 
     style App fill:#e74c3c,color:#fff
     style DB fill:#3498db,color:#fff
+    style Redis fill:#d63031,color:#fff
+    style Celery fill:#e67e22,color:#fff
     style Kali fill:#2ecc71,color:#fff
     style LLM fill:#9b59b6,color:#fff
     style Skills fill:#f39c12,color:#fff
@@ -60,16 +71,18 @@ graph TB
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Web Framework** | FastAPI 0.115+ | Async REST API + WebSocket + static file serving |
+| **Web Framework** | FastAPI 0.115+ | Async REST API + WebSocket |
 | **Agent Framework** | LangGraph 0.2+ | Deep Agents — `StateGraph`, `create_react_agent`, conditional routing |
 | **LLM Integration** | LangChain Core 0.3+ | Tool bindings, message types, chat model abstractions |
-| **LLM Providers** | LangChain-Ollama/OpenAI/Anthropic/Groq/Google | Provider-specific ChatModel implementations |
-| **Database** | PostgreSQL 16 + SQLAlchemy 2.0 (async) | Persistent storage with `asyncpg` driver |
+| **LLM Providers** | LangChain-Ollama/OpenAI/Anthropic/Groq/Google | 8 provider-specific ChatModel implementations |
+| **Task Queue** | Celery 5.4+ | Distributed agent execution across worker nodes |
+| **Message Broker** | Redis 7 | Celery broker + inter-agent pub/sub message bus |
+| **Database** | PostgreSQL 16 + SQLAlchemy 2.0 (async) | Agents, memories, findings — enterprise-grade persistence |
 | **Auth** | python-jose + passlib (bcrypt) | JWT-based authentication |
-| **Tool Execution** | Docker SDK (Python) | Execute commands in Kali container via `docker.sock` |
-| **Proxy** | mitmproxy 10.2+ | HTTP request/response interception (planned) |
-| **Frontend** | Vanilla HTML/CSS/JS | Single-page dashboard served as static files |
-| **Containerization** | Docker Compose | 3-container orchestration |
+| **Tool Execution** | Docker SDK (Python) | Execute commands in per-scan Kali containers via `docker.sock` |
+| **Frontend** | React 18 + Vite + TypeScript | Enterprise SPA with live agent graph visualization |
+| **Agent Graph UI** | React Flow (@xyflow/react) | Real-time agent tree visualization |
+| **Containerization** | Docker Compose | Multi-container orchestration with dynamic Kali spawning |
 
 ### Python Dependencies (Key)
 
@@ -96,30 +109,53 @@ graph LR
     subgraph Docker["Docker Compose Network"]
         subgraph AppContainer["redstrike-app"]
             FastAPI["FastAPI :9000"]
-            AgentGraph["LangGraph Deep Agents"]
-            SkillLoader["Skill Loader"]
-            DockerExec["Docker Executor"]
+            Coordinator["Dynamic Coordinator"]
+            Factory["Agent Factory"]
+            Registry["Agent Registry"]
+        end
+
+        subgraph WorkerContainer["redstrike-worker x N"]
+            Celery["Celery Workers"]
         end
 
         subgraph DBContainer["redstrike-db"]
             Postgres["PostgreSQL 16 :5432 internal only"]
         end
 
-        subgraph KaliContainer["redstrike-kali"]
-            Tools["nmap, nuclei, sqlmap, ffuf, dalfox, katana"]
-            SecLists["SecLists Wordlists"]
+        subgraph RedisContainer["redstrike-redis"]
+            Redis["Redis 7"]
+        end
+
+        subgraph KaliContainers["Per-Scan Kali Containers"]
+            K1["kali-scan-101"]
+            K2["kali-scan-102"]
         end
     end
 
     Host["Host Machine"] -->|port 9000| FastAPI
-    FastAPI -->|asyncpg internal network| Postgres
-    DockerExec -->|docker.sock| KaliContainer
-    AgentGraph -->|HTTP| LLM["LLM Provider"]
+    FastAPI -->|asyncpg internal| Postgres
+    FastAPI -->|pub/sub| Redis
+    Celery -->|task broker| Redis
+    Celery -->|results| Postgres
+    Celery -->|docker.sock| KaliContainers
+    Coordinator -->|HTTP| LLM["LLM Providers"]
 
     style AppContainer fill:#e74c3c,color:#fff
+    style WorkerContainer fill:#e67e22,color:#fff
     style DBContainer fill:#3498db,color:#fff
-    style KaliContainer fill:#27ae60,color:#fff
+    style RedisContainer fill:#d63031,color:#fff
+    style KaliContainers fill:#27ae60,color:#fff
 ```
+
+### Container Architecture
+
+| Container | Purpose | Port | Scaling |
+|-----------|---------|------|----------|
+| `redstrike-app` | FastAPI + Coordinator + React SPA | 9000 | 1 instance |
+| `redstrike-worker` | Celery workers executing agents | internal | `--scale=N` |
+| `redstrike-db` | PostgreSQL (internal only) | internal 5432 | 1 instance |
+| `redstrike-redis` | Celery broker + Message Bus | internal 6379 | 1 instance |
+| `kali-scan-{id}` | Per-scan Kali Linux (dynamic) | — | 1 per active scan |
 
 ### Volume Mounts
 
@@ -127,84 +163,185 @@ graph LR
 |-----------|-------|---------|
 | `redstrike-app` | `.:/app` | Application code (hot-reload) |
 | `redstrike-app` | `./skills:/app/skills` | Skill files |
-| `redstrike-app` | `/var/run/docker.sock` | Docker SDK access to Kali container |
+| `redstrike-app` | `/var/run/docker.sock` | Docker SDK access |
+| `redstrike-worker` | `.:/app` | Application code |
+| `redstrike-worker` | `/var/run/docker.sock` | Docker SDK for Kali containers |
 | `redstrike-db` | `postgres_data:/var/lib/postgresql/data` | Persistent database storage |
-| `redstrike-kali` | `kali_data:/data` | Tool output storage |
-| `redstrike-kali` | `./skills:/skills:ro` | Read-only skill files |
+| `redstrike-redis` | `redis_data:/data` | Redis persistence |
 
 ---
 
-## 4. LangGraph Deep Agent Architecture
+## 4. Dynamic Agent Engine
 
-RedStrike uses the **LangGraph Deep Agents** pattern — a hierarchical multi-agent system where:
+RedStrike uses a **Dynamic Deep Agent Orchestration** pattern — replacing a static fixed-agent graph with a runtime agent factory:
 
-- The **Orchestrator** is the entry point that plans and coordinates
-- **12 Subagents** are specialized `create_react_agent` instances
-- A **StateGraph** manages state flow and conditional phase transitions
-- **pre_model_hook** handles context window management
-- **Skills** are injected into system prompts using progressive disclosure
+- A **Dynamic Coordinator** analyzes the target and plans agent spawning
+- An **Agent Factory** creates any agent type on demand with the right model, tools, and skills
+- An **Agent Registry** (PostgreSQL-backed) tracks all agents, their status, and parent-child relationships
+- A **Message Bus** (PostgreSQL + Redis) enables inter-agent communication
+- A **Memory Engine** (PostgreSQL) persists findings across scans for cross-scan learning
+- **Celery Workers** execute agents in parallel across distributed worker nodes
+
+### Simplified StateGraph (3 Nodes)
 
 ```mermaid
 graph TD
-    Entry["Entry Point"] --> Orch["Orchestrator"]
+    Entry["Entry Point"] --> Coord["Coordinator"]
+    Coord -->|"Spawn N agents"| Exec["Dynamic Executor"]
+    Exec -->|"All agents done"| Check{"Findings?"}
+    Check -->|"Yes - spawn verifiers"| Exec
+    Check -->|"No / verified"| Report["Reporter"]
+    Report --> End["END"]
 
-    Orch -->|recon enabled| NR["Network Recon"]
-    Orch -->|skip to discovery| ED["Endpoint Discovery"]
-    Orch -->|skip to testing| IT["Injection Tester"]
-
-    NR --> WR["Web Recon"]
-    WR -->|has code_url| CA["Code Analyzer"]
-    WR -->|discovery| ED
-    WR -->|skip to testing| IT
-    WR -->|skip to report| RP["Reporter"]
-
-    CA --> ED
-    ED --> PD["Param Discovery"]
-    PD -->|testing| IT
-    PD -->|skip to report| RP
-
-    IT --> AT["Auth Tester"]
-    AT --> CT["Config Tester"]
-    CT --> LT["Logic Tester"]
-    LT --> VS["Vuln Scanner"]
-    VS -->|findings exist| VF["Verifier - Two-Step PoC"]
-    VS -->|no findings| RP
-
-    VF --> RP
-    RP --> End["END"]
-
-    style Orch fill:#e74c3c,color:#fff
-    style NR fill:#3498db,color:#fff
-    style WR fill:#3498db,color:#fff
-    style CA fill:#3498db,color:#fff
-    style ED fill:#2ecc71,color:#fff
-    style PD fill:#2ecc71,color:#fff
-    style IT fill:#e67e22,color:#fff
-    style AT fill:#e67e22,color:#fff
-    style CT fill:#e67e22,color:#fff
-    style LT fill:#e67e22,color:#fff
-    style VS fill:#e67e22,color:#fff
-    style VF fill:#9b59b6,color:#fff
-    style RP fill:#1abc9c,color:#fff
+    style Coord fill:#e74c3c,color:#fff
+    style Exec fill:#e67e22,color:#fff
+    style Report fill:#1abc9c,color:#fff
 ```
 
-### Why Deep Agents?
+The Coordinator dynamically spawns agents inside the Executor node:
 
-| Traditional Approach | Deep Agents Approach (RedStrike) |
+```mermaid
+graph TD
+    Coord["Coordinator"] -->|spawn| R1["Recon Agent 1"]
+    Coord -->|spawn| R2["Recon Agent 2"]
+    Coord -->|spawn| R3["Web Recon Agent"]
+    
+    R1 -->|results| Coord
+    R2 -->|results| Coord
+    R3 -->|results| Coord
+    
+    Coord -->|"50 endpoints found"| D1["Discovery 1"]
+    Coord --> D2["Discovery 2"]
+    Coord --> D3["Discovery 3"]
+    
+    D1 --> Coord
+    D2 --> Coord
+    D3 --> Coord
+    
+    Coord -->|"1 per vuln type x endpoint chunk"| T1["Injection Agent 1"]
+    Coord --> T2["Injection Agent 2"]
+    Coord --> T3["Auth Agent 1"]
+    Coord --> T4["Config Agent 1"]
+    Coord --> TN["... N more agents"]
+
+    style Coord fill:#e74c3c,color:#fff
+    style R1 fill:#3498db,color:#fff
+    style R2 fill:#3498db,color:#fff
+    style R3 fill:#3498db,color:#fff
+    style D1 fill:#2ecc71,color:#fff
+    style D2 fill:#2ecc71,color:#fff
+    style D3 fill:#2ecc71,color:#fff
+    style T1 fill:#e67e22,color:#fff
+    style T2 fill:#e67e22,color:#fff
+    style T3 fill:#e67e22,color:#fff
+    style T4 fill:#e67e22,color:#fff
+    style TN fill:#e67e22,color:#fff
+```
+
+### Why Dynamic Agents?
+
+| Static Approach (Old) | Dynamic Approach (New) |
 |---------------------|----------------------------------|
-| Single monolithic agent with all tools | Orchestrator delegates to specialized subagents |
-| One shared context window | Each subagent has its own context with `pre_model_hook` trimming |
-| All knowledge loaded at once | Progressive disclosure loads skills on demand |
-| One model for everything | Per-agent LLM routing — right model for the right task |
-| No state persistence | `ScanState` TypedDict enables pause/resume |
+| Fixed 12 agents for every scan | 10-100+ agents adapted to target complexity |
+| Sequential execution (A → B → C) | Parallel execution within phases |
+| Single shared Kali container | Per-scan isolated Kali container |
+| No inter-agent communication | Message bus for findings sharing |
+| No memory across scans | PostgreSQL-backed persistent memory |
+| Single process | Distributed Celery workers (scale horizontally) |
+| Per-agent LLM routing | Per-agent LLM routing (preserved) |
+| Progressive disclosure skills | Progressive disclosure skills (preserved) |
 
 ---
 
-## 5. StateGraph & Conditional Routing
+## 5. Agent Registry & Lifecycle
 
-### ScanState Schema
+### Agent Instance Schema
 
-The `ScanState` TypedDict is the central data structure flowing through all agents:
+Every dynamically spawned agent is tracked in PostgreSQL via the `agent_instances` table:
+
+```mermaid
+classDiagram
+    class AgentInstance {
+        +UUID agent_id PK
+        +int scan_id FK
+        +int project_id FK
+        +str agent_type
+        +str task
+        +AgentStatus status
+        +UUID parent_id FK self
+        +str model
+        +int iteration_count
+        +int max_iterations
+        +str result
+        +str error
+        +str kali_container_id
+        +datetime created_at
+        +datetime started_at
+        +datetime completed_at
+    }
+
+    class AgentStatus {
+        <<enumeration>>
+        PENDING
+        RUNNING
+        WAITING
+        COMPLETED
+        FAILED
+        KILLED
+    }
+
+    class AgentMessage {
+        +int id PK
+        +int scan_id FK
+        +UUID from_agent_id FK
+        +UUID to_agent_id FK
+        +str msg_type
+        +str content
+        +datetime created_at
+        +datetime read_at
+    }
+
+    AgentInstance --> AgentStatus
+    AgentInstance "1" --> "*" AgentInstance : parent-child
+    AgentInstance "1" --> "*" AgentMessage : sends/receives
+```
+
+### Agent Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Factory.create_agent()
+    PENDING --> RUNNING: Celery picks up task
+    RUNNING --> WAITING: Spawned child agents
+    WAITING --> RUNNING: Children completed
+    RUNNING --> COMPLETED: Task finished
+    RUNNING --> FAILED: Error occurred
+    RUNNING --> KILLED: User/coordinator kill
+    WAITING --> KILLED: User/coordinator kill
+    COMPLETED --> [*]
+    FAILED --> [*]
+    KILLED --> [*]
+```
+
+### Global Agent Registry API
+
+```python
+class GlobalAgentRegistry:
+    """PostgreSQL-backed agent registry for enterprise auditability."""
+    
+    async def register(scan_id, agent_type, task, parent_id, model, 
+                       kali_container_id) -> AgentRecord
+    async def update_status(agent_id, status, result=None, error=None)
+    async def get_children(agent_id) -> List[AgentRecord]
+    async def get_agent(agent_id) -> Optional[AgentRecord]
+    async def get_scan_agents(scan_id) -> List[AgentRecord]
+    async def get_active_count(scan_id) -> int
+    async def get_graph_snapshot(scan_id) -> Dict  # For React Flow UI
+    async def kill_agent(agent_id)
+    async def kill_all(scan_id)
+```
+
+### ScanState Schema (Updated)
 
 ```mermaid
 classDiagram
@@ -214,6 +351,14 @@ classDiagram
         +ScanConfig scan_config
         +str current_phase
         +list phase_history
+        +int scan_id
+        +str coordinator_id
+        +list active_agent_ids
+        +list completed_agent_ids
+        +dict agent_results
+        +str kali_container_id
+        +int max_concurrent_agents
+        +str current_spawn_phase
         +ReconResults recon_results
         +DiscoveryResults discovery_results
         +list potential_findings
@@ -245,109 +390,166 @@ classDiagram
         +bool vuln_scanning
     }
 
-    class Finding {
-        +str id
-        +str title
-        +str severity
-        +str vulnerability_type
-        +str affected_url
-        +str affected_parameter
-        +str description
-        +str evidence
-        +str verification_status
-        +list poc_steps
-        +str poc_code
-        +str owasp_category
-    }
-
     ScanState --> TargetConfig
     ScanState --> ScanConfig
-    ScanState --> Finding
 ```
-
-### Conditional Routing Logic
-
-The graph uses **conditional edges** to skip phases dynamically:
-
-```python
-# From orchestrator — choose first phase
-orchestrator → [recon?] → network_recon
-             → [discovery?] → endpoint_discovery
-             → [testing?] → injection_tester
-
-# From web_recon — choose next phase
-web_recon → [code_url?] → code_analyzer
-          → [discovery?] → endpoint_discovery
-          → [testing?] → injection_tester
-          → reporter  # skip everything
-
-# From vuln_scanner — verification gate
-vuln_scanner → [findings?] → verifier
-             → reporter  # no findings to verify
-```
-
-Each routing function inspects the `ScanConfig` booleans to determine which phases to run. This means a user can configure a scan to run only reconnaissance, or only injection testing, and the graph adapts.
-
-### Scan Modes
-
-| Mode | Description | Enables |
-|------|-------------|---------|
-| **Blackbox** | No credentials, no source code | All external testing phases |
-| **Greybox** | Credentials provided | Blackbox + authenticated testing |
-| **Whitebox** | Credentials + source code URL | Greybox + code_analyzer subagent |
 
 ---
 
-## 6. Subagent Breakdown
+## 6. Agent Factory & Types
 
-Each subagent is created by the `create_skill_aware_subagent()` factory:
+### How the Factory Works
 
-```python
-agent = create_skill_aware_subagent(
-    model=get_model_for_agent("injection_tester"),  # Per-agent model
-    tools=INJECTION_LANGCHAIN_TOOLS,                # LangChain tools
-    skill_categories=["web/a03-injection", "injection"],  # Skill context
-    base_prompt=INJECTION_TESTER_PROMPT,            # Role-specific prompt
-    max_context_messages=20,                         # Context window limit
-)
+```mermaid
+sequenceDiagram
+    participant Coord as Coordinator
+    participant Factory as AgentFactory
+    participant Registry as AgentRegistry (PG)
+    participant Router as LLM Router
+    participant Skills as SkillLoader
+    participant Celery as Celery Worker
+
+    Coord->>Factory: create_agent(task, type, parent_id)
+    Factory->>Factory: _resolve_agent_type(task)
+    Factory->>Router: get_model_for_agent(agent_type)
+    Router-->>Factory: ChatModel instance
+    Factory->>Skills: get_progressive_context(categories)
+    Skills-->>Factory: Skill-enriched system prompt
+    Factory->>Registry: register(scan_id, type, task, parent_id, model)
+    Registry-->>Factory: AgentRecord (agent_id)
+    Factory->>Celery: submit_task(agent_id, config)
+    Celery-->>Factory: Task ID
+    Factory-->>Coord: agent_id
 ```
 
-### Subagent Details
+### Agent Type Mappings
 
-| Subagent | Model (Default) | Tools | Skills | Output |
-|----------|----------------|-------|--------|--------|
-| `network_recon` | mistral:7b | subfinder, nmap, httpx | network/reconnaissance | Subdomains, ports, services |
-| `web_recon` | mistral:7b | whatweb, wafw00f | network/recon, web/a05, configuration | Technologies, WAF, headers |
-| `code_analyzer` | qwen2.5-coder:14b | — | web/a03-injection, web/a08 | Code vulnerabilities (whitebox) |
-| `endpoint_discovery` | mistral:7b | ffuf, katana, gobuster | reconnaissance | Directories, endpoints, URLs |
-| `param_discovery` | mistral:7b | arjun, paramspider | reconnaissance | Hidden params, API endpoints |
-| `injection_tester` | qwen2.5-coder:14b | sqlmap, dalfox, curl | web/a03, web/xss, injection | XSS, SQLi, SSRF, XXE, RCE, SSTI |
-| `auth_tester` | qwen2.5:7b | curl | web/a07, web/a01, authentication | IDOR, auth bypass, JWT, sessions |
-| `config_tester` | qwen2.5:7b | curl | web/a05, configuration | Misconfigs, headers, SSL |
-| `logic_tester` | qwen2.5:7b | curl | web/a04, logic | Business logic, race conditions |
-| `vuln_scanner` | mistral:7b | nuclei, nikto | web/a06, vulnerabilities | CVEs, known vulns |
-| `verifier` | qwen2.5-coder:20b | curl, sqlmap, dalfox | exploitation | Verified findings + PoC code |
-| `reporter` | qwen2.5:7b | — | — | Markdown report |
+| Agent Type | Skill Categories | Tools | Spawning Rule |
+|---|---|---|---|
+| `network_recon` | `network/reconnaissance` | subfinder, nmap, httpx | 1-3 per scope |
+| `web_recon` | `network/recon`, `web/a05`, `configuration` | whatweb, wafw00f | 1 per domain |
+| `code_analyzer` | `web/a03-injection`, `web/a08` | — | Whitebox only |
+| `endpoint_discovery` | `reconnaissance` | ffuf, katana, gobuster | 1-5 per domain |
+| `param_discovery` | `reconnaissance` | arjun, paramspider | 1-3 per API |
+| `injection_tester` | `web/a03`, `injection` | sqlmap, dalfox, curl | 1 per endpoint chunk × vuln type |
+| `auth_tester` | `web/a07`, `authentication` | curl | 1-3 per auth endpoint |
+| `config_tester` | `web/a05`, `configuration` | curl | 1-2 per domain |
+| `logic_tester` | `web/a04`, `logic` | curl | 1-2 per workflow |
+| `vuln_scanner` | `web/a06`, `vulnerabilities` | nuclei, nikto | 1-3 per domain |
+| `verifier` | `exploitation` | curl, sqlmap, dalfox | 1 per finding |
+| `reporter` | — | — | 1 per scan |
 
 ### Context Window Management
 
-Each subagent uses a `pre_model_hook` to prevent context overflow:
+Each agent uses a `pre_model_hook` to prevent context overflow:
 
 ```mermaid
 graph LR
-    A["All Messages - potentially 100+"] --> B["pre_model_hook"]
-    B --> C["System Messages - always kept"]
-    B --> D["Most Recent N Other Messages"]
-    C --> E["Trimmed Context - max 20 messages"]
+    A["All Messages"] --> B["pre_model_hook"]
+    B --> C["System Msgs (skills + memories)"]
+    B --> D["Recent N Messages"]
+    C --> E["Trimmed Context"]
     D --> E
     E --> F["LLM Call"]
 ```
 
-This is critical because security tool outputs can be very large (nmap scans, nuclei results). The hook ensures the agent never exceeds its context window while preserving the system prompt with skill knowledge.
+### Per-Scan Container Isolation
+
+```mermaid
+graph LR
+    subgraph "User A"
+        S1["Scan 1"] --> K1["kali-scan-101"]
+        S2["Scan 2"] --> K2["kali-scan-102"]
+    end
+    subgraph "User B"
+        S3["Scan 3"] --> K3["kali-scan-103"]
+    end
+
+    style K1 fill:#27ae60,color:#fff
+    style K2 fill:#27ae60,color:#fff
+    style K3 fill:#27ae60,color:#fff
+```
+
+Each scan scope gets its own Kali container. Multi-user safe — User A's agents can't access User B's container.
 
 ---
 
-## 7. Skill System (Progressive Disclosure)
+## 7. Memory Engine
+
+### Cross-Scan Memory Architecture
+
+```mermaid
+graph TD
+    subgraph "Scan N (Current)"
+        Coord["Coordinator"] -->|1. recall| ME["Memory Engine"]
+        ME -->|2. query| PG["scan_memories table"]
+        PG -->|3. relevant memories| ME
+        ME -->|4. inject into prompt| Agent["Agent"]
+        Agent -->|5. new finding| ME
+        ME -->|6. store| PG
+    end
+
+    subgraph "Scan N-1 (Previous)"
+        PrevAgent["Previous Agent"] -->|stored| PG
+    end
+
+    style ME fill:#9b59b6,color:#fff
+    style PG fill:#3498db,color:#fff
+```
+
+### Memory Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `finding` | Previously discovered vulnerability | "SQLi at /api/login via `id` parameter" |
+| `technique` | Effective attack technique | "WAF bypass: double URL encoding" |
+| `target_info` | Infrastructure knowledge | "Runs nginx/1.18, PHP 8.1, MySQL 8.0" |
+| `tool_output` | Key tool results | "Nuclei found 3 CVEs in jQuery 3.4.1" |
+
+### Memory Schema
+
+```sql
+CREATE TABLE scan_memories (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id),
+    target_url VARCHAR(500) NOT NULL,
+    memory_type VARCHAR(20) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    source_scan_id INTEGER REFERENCES scans(id),
+    severity VARCHAR(20),
+    confidence FLOAT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_verified_at TIMESTAMP,
+    is_stale BOOLEAN DEFAULT FALSE
+);
+```
+
+### Freshness System
+
+Memories include age-based freshness warnings when injected into agent prompts:
+
+| Age | Note |
+|-----|------|
+| ≤ 1 day | *(none — fresh)* |
+| 2-7 days | ⚠️ "This memory is N days old. Verify against current scan data." |
+| 8-30 days | ⚠️ "This memory is N days old. Target may have changed." |
+| 30+ days | ⚠️ "This memory is N days old. Treat as unverified." |
+
+### Memory Engine API
+
+```python
+class MemoryEngine:
+    async def store(project_id, target_url, memory_type, title, content, ...)
+    async def recall(project_id, target_url, query, max_memories=5)
+    async def get_target_history(target_url)
+    async def mark_stale(memory_id)
+    async def consolidate(scan_id)  # Post-scan memory extraction
+```
+
+---
+
+## 8. Skill System (Progressive Disclosure)
 
 The skill system follows the **Agent Skills specification** (agentskills.io) with 3-level progressive disclosure:
 
@@ -417,7 +619,7 @@ sequenceDiagram
 
 ---
 
-## 8. LLM Router (Multi-Provider)
+## 9. LLM Router (Multi-Provider)
 
 The `LLMRouter` class provides **per-agent model routing** — each of the 12 subagents can use a different LLM provider and model.
 
@@ -488,7 +690,7 @@ graph TD
 
 ---
 
-## 9. Tool Execution Pipeline
+## 10. Tool Execution Pipeline
 
 All security tools execute inside the Kali Linux Docker container. The pipeline:
 
@@ -555,7 +757,7 @@ graph LR
 
 ---
 
-## 10. Database Schema
+## 11. Database Schema
 
 ```mermaid
 erDiagram
@@ -667,7 +869,7 @@ erDiagram
 
 ---
 
-## 11. API Layer
+## 12. API Layer
 
 ### Architecture
 
@@ -735,7 +937,7 @@ sequenceDiagram
 
 ---
 
-## 12. Real-time Communication
+## 13. Real-time Communication
 
 ### WebSocket Architecture
 
@@ -788,7 +990,7 @@ If WebSocket disconnects, the frontend can poll `GET /api/projects/{id}/status`:
 
 ---
 
-## 13. Scan Lifecycle & Data Flow
+## 14. Scan Lifecycle & Data Flow
 
 ### End-to-End Data Flow
 
@@ -860,7 +1062,7 @@ sequenceDiagram
 
 ---
 
-## 14. Security Design
+## 15. Security Design
 
 ### Threat Model
 
@@ -896,50 +1098,121 @@ Host OS
 
 ---
 
-## 15. Frontend Architecture
+## 16. Distributed Architecture
 
-The current frontend is a **vanilla HTML/CSS/JS single-page application** served as static files by FastAPI.
+### Celery + Redis
 
+```mermaid
+graph LR
+    subgraph "FastAPI Process"
+        API["API"] -->|submit| CeleryClient["Celery Client"]
+    end
+
+    subgraph "Redis"
+        Broker["Task Broker"]
+        PubSub["Pub/Sub Channels"]
+    end
+
+    subgraph "Worker Pool (scalable)"
+        W1["Worker 1"]
+        W2["Worker 2"]
+        WN["Worker N"]
+    end
+
+    CeleryClient -->|task| Broker
+    Broker -->|dispatch| W1
+    Broker -->|dispatch| W2
+    Broker -->|dispatch| WN
+    W1 -->|agent events| PubSub
+    W2 -->|agent events| PubSub
+    PubSub -->|WebSocket| API
+
+    style Broker fill:#d63031,color:#fff
+    style PubSub fill:#d63031,color:#fff
 ```
-frontend/
-├── index.html        # Single HTML file with all views
-├── css/
-│   └── styles.css    # Dark theme styles
-└── js/
-    ├── api.js        # REST API client (fetch wrapper + JWT)
-    ├── websocket.js  # WebSocket client (auto-reconnect)
-    └── app.js        # View routing, event handlers, DOM manipulation
-```
 
-### View Architecture
-
-| View | Route | Data Source |
-|------|-------|-------------|
-| Login | `#login` | `POST /api/auth/login` |
-| Projects | `#projects` | `GET /api/projects/` |
-| Project Detail | `#project/{id}` | `GET /api/projects/{id}` + WebSocket |
-| Site View | `#site-view` | `GET /api/projects/{id}/sitemap` |
-| Findings | `#findings` | `GET /api/projects/{id}/findings` |
-| Settings | `#settings` | `GET /api/config` |
-
-> **Note**: The frontend is planned for a major overhaul to better surface backend capabilities (scan control, charts, HTTP history, per-agent config).
+**Scaling**: `docker compose up --scale celery-worker=3` adds more worker nodes. Each worker can execute up to 50 concurrent agent tasks.
 
 ---
 
-## 16. Key Design Decisions
+## 17. Frontend Architecture
+
+The frontend is a **React + Vite + TypeScript SPA** with enterprise-grade design.
+
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── AgentGraph/         # Live agent tree (React Flow)
+│   │   ├── FindingsTable/      # Sortable findings with severity badges
+│   │   ├── ScanControl/        # Start/pause/cancel buttons
+│   │   ├── MemoryViewer/       # Target scan history
+│   │   └── Layout/             # Sidebar, header, navigation
+│   ├── pages/
+│   │   ├── Login.tsx
+│   │   ├── Projects.tsx
+│   │   ├── ProjectDetail.tsx   # Agent graph + findings + scan log
+│   │   └── Settings.tsx
+│   ├── hooks/
+│   │   ├── useWebSocket.ts     # Real-time agent updates
+│   │   └── useAgentGraph.ts    # Agent tree state management
+│   ├── api/
+│   │   └── client.ts           # React Query + fetch wrapper
+│   └── App.tsx
+├── index.html
+├── vite.config.ts
+└── package.json
+```
+
+### Key Libraries
+
+| Library | Purpose |
+|---------|----------|
+| `react-router-dom` | Client-side routing |
+| `@tanstack/react-query` | Server state management + caching |
+| `@xyflow/react` | Live agent graph visualization |
+| `recharts` | Severity donut charts, trends |
+| `framer-motion` | Micro-animations |
+| `lucide-react` | Icons |
+
+---
+
+## 18. Federation Roadmap
+
+RedStrike.AI is designed to be **federation-ready** — multiple instances across regions can register, communicate, and delegate scans.
+
+```mermaid
+graph TB
+    RS1["RedStrike US-East"] <-->|Federation API| RS2["RedStrike EU-West"]
+    RS2 <-->|Federation API| RS3["RedStrike APAC"]
+    RS1 <-->|Federation API| RS3
+
+    style RS1 fill:#e74c3c,color:#fff
+    style RS2 fill:#e74c3c,color:#fff
+    style RS3 fill:#e74c3c,color:#fff
+```
+
+**Phase 1** (current): Single-instance, single-organization deployment.  
+**Phase 2** (future): Multi-instance federation with scan delegation and shared memory.
+
+---
+
+## 19. Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **LangGraph over smolagents** | Deep Agents pattern provides better separation of concerns, per-agent context management, and conditional routing |
+| **Dynamic agents over fixed agents** | Target complexity varies wildly — a 5-page blog needs 12 agents, a 200-endpoint SaaS needs 150+. Static graphs can't adapt. |
+| **Celery + Redis over asyncio-only** | Horizontal scaling. Single-process asyncio caps at one machine. Celery workers can be scaled across nodes. |
+| **PostgreSQL for agent registry** | Enterprise auditability. Every agent spawn, status change, and result is persisted and queryable. |
+| **PostgreSQL for memory** | Central, enterprise-compliant storage. Memories persist across scans, users, and restarts. No file-system dependency. |
+| **Per-scan Kali containers** | Multi-user isolation. User A's scan can't interfere with User B's. Each scan gets a clean environment. |
+| **React + Vite** | Enterprise frontend needs component architecture, real-time agent graph (React Flow), and proper state management. |
+| **Federation-ready stubs** | Architecture designed from day 1 for multi-location deployment. API stubs exist; implementation is incremental. |
+| **LangGraph preserved** | `create_react_agent` is still the core agent primitive. We changed orchestration (static → dynamic), not the agent engine. |
 | **Per-agent LLM routing** | Different tasks need different model strengths — use a strong coder for injection testing, a fast model for recon |
 | **Skills as SKILL.md files** | Follows the agentskills.io standard, easy for non-developers to contribute knowledge |
-| **Progressive disclosure** | Prevents context window overflow — only load detailed knowledge when the agent needs it |
-| **Docker-based tool execution** | Isolates all security tools from the host, reproducible environment, no host dependencies |
-| **PostgreSQL over SQLite** | Multi-user support, concurrent access, production-ready |
-| **Vanilla frontend** | Simple to serve (FastAPI StaticFiles), no build step, easy to iterate — migration to React/Vite planned |
-| **WebSocket + polling** | WebSocket for real-time experience, polling as fallback for reliability |
-| **Two-step verification** | Reduces false positives — all findings go through a dedicated verifier agent before being reported as confirmed |
-| **State persistence in DB** | Enables pause/resume — the scan state snapshot is saved as JSON in the project record |
+| **Two-step verification** | Reduces false positives — all findings go through a dedicated verifier agent before being reported |
+| **WebSocket + polling** | WebSocket for real-time agent graph updates, polling as fallback for reliability |
 
 ---
 
