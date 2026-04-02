@@ -102,7 +102,7 @@ graph LR
         end
 
         subgraph DBContainer["redstrike-db"]
-            Postgres["PostgreSQL 16 :5432"]
+            Postgres["PostgreSQL 16 :5432 internal only"]
         end
 
         subgraph KaliContainer["redstrike-kali"]
@@ -112,8 +112,7 @@ graph LR
     end
 
     Host["Host Machine"] -->|port 9000| FastAPI
-    Host -->|port 5432| Postgres
-    FastAPI -->|asyncpg| Postgres
+    FastAPI -->|asyncpg internal network| Postgres
     DockerExec -->|docker.sock| KaliContainer
     AgentGraph -->|HTTP| LLM["LLM Provider"]
 
